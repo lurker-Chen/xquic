@@ -4,12 +4,38 @@ XQUIC currently supports `Android` , `iOS` , `HarmonyOS` , `Linux` , `macOS` and
 
 ## Android/iOS/HarmonyOS Compile Script
 
-The Android, iOS and HarmonyOS use `.so` files, there is a [ `xqc_build.sh` ](../xqc_build.sh) script in the XQUIC library directory, execute the script to compile to complete the corresponding compilation.
+For Android, iOS and HarmonyOS there is a [ `xqc_build.sh` ](../xqc_build.sh) script in the XQUIC library directory, execute the script to compile to complete the corresponding compilation. All platforms build from the root `CMakeLists.txt` .
 
 ```bash
-sh xqc_build.sh ios/android/harmony <build_dir> <artifact_dir> <ssl_path>
+sh xqc_build.sh ios/android/harmony <build_dir> <artifact_dir> <ssl_inc_path> <ssl_lib_path>
 ```
-specially, `<ssl_path> can be ${PWD}/third_party/boringssl or ${PWD}/third_party/babassl`
+
+`<ssl_inc_path>` is the directory holding `openssl/ssl.h`, and `<ssl_lib_path>` is a
+semicolon-separated list of the static libraries to link, for example:
+
+```bash
+sh xqc_build.sh android build_android artifact_android \
+    ${PWD}/third_party/boringssl/include \
+    "${PWD}/third_party/boringssl/build/libssl.a;${PWD}/third_party/boringssl/build/libcrypto.a"
+```
+
+Both paths have to be passed explicitly: cross-compiling toolchains confine CMake's
+`find_library`/`find_path` to their own sysroot, so the SSL backend cannot be
+auto-discovered. Build BoringSSL or Tongsuo(BabaSSL) for the target ABI first — one
+build per ABI, since a single `<ssl_lib_path>` cannot serve several architectures.
+
+Artifacts land in `<artifact_dir>/<abi>/` :
+
+| Platform | Artifacts |
+| -------- | --------- |
+| Android / HarmonyOS | `libxquic.so` and `libxquic-static.a` |
+| iOS | `libxquic.a` only |
+
+iOS passes `-DXQC_NO_SHARED=ON` , which is also available for direct CMake builds. It
+skips the shared library entirely and renames the static one to `libxquic.a` , for
+platforms that link XQUIC into a larger binary. Note that the static library carries no
+link options of its own, so the consumer is responsible for linking the SSL backend,
+pthread and — when the SSL backend is C++, as BoringSSL is — a C++ runtime.
 
 > Note: You need to specify the IOS/android/harmony build toolchain before compiling, download and set the environment variable IOS_CMAKE_TOOLCHAIN or ANDROID_NDK or HMOS_CMAKE_PATH and HMOS_CMAKE_TOOLCHAIN, or directly modify CMAKE_TOOLCHAIN_FILE and HMOS_CMAKE_TOOLCHAIN in `xqc_build.sh` .
 

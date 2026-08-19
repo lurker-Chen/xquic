@@ -99,10 +99,8 @@ MESSAGE("-- SSL_INC_PATH: ${SSL_INC_PATH}")
 
 
 # C_FLAGS
-if(ANDROID_ABI OR PLATFORM MATCHES "mac")
-    if(PLATFORM STREQUAL "mac32")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32")
-    endif()
+if(PLATFORM STREQUAL "mac32")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32")
 endif()
 
 if(NOT (CMAKE_C_COMPILER_ID MATCHES "MSVC" OR CMAKE_CXX_COMPILER_ID MATCHES "MSVC"))
@@ -155,6 +153,11 @@ endif()
 # print only error log
 if(XQC_ONLY_ERROR_LOG)
     set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -DXQC_ONLY_ERROR_LOG ")
+endif()
+
+# compile out all logging
+if(XQC_DISABLE_LOG)
+    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -DXQC_DISABLE_LOG ")
 endif()
 
 # enable event log
@@ -403,34 +406,47 @@ add_library(
     ${XQC_SOURCE}
 )
 
-add_library(
-    xquic
-    SHARED
-    ${XQC_SOURCE}
-)
-
-if(APPLE OR PLATFORM MATCHES "mac")
-    target_link_libraries(
-        xquic
-        "-ldl -Wl,-all_load"
-        ${SSL_LIB_PATH}
-        "-Wl"
-        -lpthread
-        -lstdc++
-    )
+if(XQC_NO_SHARED)
+    set_target_properties(xquic-static PROPERTIES OUTPUT_NAME xquic)
 else()
-    target_link_libraries(
+    add_library(
         xquic
-        "-ldl -Wl,--whole-archive -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/scripts/xquic.lds"
-        ${SSL_LIB_PATH}
-        "-Wl,--no-whole-archive"
-        -lpthread
+        SHARED
+        ${XQC_SOURCE}
     )
-endif()
 
+    # BoringSSL is largely C++ and gets pulled in whole below, so the shared
+    # library needs a C++ runtime even though XQUIC itself is pure C. The
+    # Android NDK names it after ANDROID_STL instead of libstdc++.
+    if(ANDROID)
+        set(XQC_CXX_RUNTIME c++_shared)
+    else()
+        set(XQC_CXX_RUNTIME -lstdc++)
+    endif()
 
-# Strip binary for release builds
-if(CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_STRIP} libxquic.so)
+    if(APPLE OR PLATFORM MATCHES "mac")
+        target_link_libraries(
+            xquic
+            "-ldl -Wl,-all_load"
+            ${SSL_LIB_PATH}
+            "-Wl"
+            -lpthread
+            ${XQC_CXX_RUNTIME}
+        )
+    else()
+        target_link_libraries(
+            xquic
+            "-ldl -Wl,--whole-archive -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/scripts/xquic.lds"
+            ${SSL_LIB_PATH}
+            "-Wl,--no-whole-archive"
+            -lpthread
+            ${XQC_CXX_RUNTIME}
+        )
+    endif()
+
+    # Strip binary for release builds
+    if(CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
+        add_custom_command(TARGET xquic POST_BUILD
+                COMMAND ${CMAKE_STRIP} libxquic.so)
+    endif()
 endif()

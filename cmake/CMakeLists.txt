@@ -11,31 +11,6 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(XQC_BINARY_TYPE SHARED)
 
-# SSL lib type, xquic support babassl and boringssl interfaces
-if(NOT SSL_TYPE)
-    set(SSL_TYPE "babassl")
-endif()
-
-# PATH of ssl
-if(NOT SSL_PATH)
-    set(SSL_PATH "/usr/local/babassl")
-endif()
-
-# ssl include path
-if(NOT SSL_INC_PATH)
-    set(SSL_INC_PATH
-        ${SSL_PATH}/include
-    )
-endif()
-
-# ssl lib denpendency
-if(NOT SSL_LIB_PATH)
-    set(SSL_LIB_PATH
-        ${SSL_PATH}/lib/libssl.a
-        ${SSL_PATH}/lib/libcrypto.a
-    )
-endif()
-
 set(COMMON_FLAGS            "-Wall -Wno-deprecated  -Wno-unused -Wno-unused-variable -Wno-pointer-sign -Wno-format-security ")
 
 set(COMMON_RELEASE_FLAGS    "-DNDEBUG")
@@ -46,12 +21,12 @@ if(GCOV)
 endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL Release)
-    set(DYNAMIC_COMPILE_FLAGS ${COMMON_RELEASE_FLAGS})
+    set(COMPILE_FLAGS ${COMMON_RELEASE_FLAGS})
 elseif(CMAKE_BUILD_TYPE STREQUAL Debug)
-    set(DYNAMIC_COMPILE_FLAGS ${COMMON_DEBUG_FLAGS})
+    set(COMPILE_FLAGS ${COMMON_DEBUG_FLAGS})
 elseif(CMAKE_BUILD_TYPE STREQUAL Minsizerel)
-    set(DYNAMIC_COMPILE_FLAGS ${COMMON_MIN_FLAGS})
-    set(DYMAMIC_LINK_OPTION "-Wl,--gc-sections")
+    set(COMPILE_FLAGS ${COMMON_MIN_FLAGS})
+    set(LINK_OPTION "-Wl,--gc-sections")
 endif()
 
 
@@ -81,8 +56,8 @@ if(XQC_SUPPORT_SENDMMSG_BUILD)
 endif()
 
 if(ANDROID)
-    set(DYMAMIC_LINK_OPTION 
-        ${DYMAMIC_LINK_OPTION}
+    set(LINK_OPTION
+        ${LINK_OPTION}
         -lm
         -llog)
 
@@ -95,43 +70,17 @@ endif()
 
 include(CMakeOptions.txt)
 
-if (XQC_BUILD_OPENSSL)
-    if(${SSL_TYPE} MATCHES "boringssl")
-        if (XQC_OPENSSL_SMALL)
-            set(OPENSSL_SMALL "1")
-        endif()
+if(${SSL_TYPE} MATCHES "boringssl")
 
-        add_subdirectory(${SSL_PATH})
-        include_directories(${SSL_PATH}/include)
-
-        if (BORINGSSL_PREFIX)
-            add_definitions(-DBORINGSSL_PREFIX=${BORINGSSL_PREFIX})
-            add_dependencies(xquic_global boringssl_prefix_symbols)
-            include_directories(${SSL_PATH}/symbol_prefix_include)
-        endif()
-
-    else()
-        set(EXTRA_CONFIGURE_OPENSSL_PARAMS "${EXTRA_CONFIGURE_OPENSSL_PARAMS} ${DYNAMIC_COMPILE_FLAGS} ")
-        add_subdirectory(external/openssl-cmake)
-    endif()
-
-    set(DYMAMIC_LINK_OPTION 
-            ssl 
-            crypto 
-            ${DYMAMIC_LINK_OPTION}
-        )
-
-elseif(XQC_EXISTS_OPENSSL)
-    if(not XQC_EXISTS_OPENSSL_INCLUDE_DIR or not XQC_EXISTS_OPENSSL_BINARY)
-        message(FATAL_ERROR  "You Must DEFINE XQC_EXISTS_OPENSSL_INCLUDE_DIR and XQC_EXISTS_OPENSSL_BINARY")
-    endif()
-
-    include_directories(XQC_EXISTS_OPENSSL_INCLUDE_DIR)
-    set(DYMAMIC_LINK_OPTION "${XQC_EXISTS_OPENSSL_BINARY} ${DYMAMIC_LINK_OPTION}")
-
-else()
-    message(FATAL_ERROR  "There Must Exists one tls impl")
+    add_subdirectory(${SSL_PATH})
+    include_directories(${SSL_PATH}/include)
 endif()
+
+set(LINK_OPTION
+        ssl
+        crypto
+        ${LINK_OPTION}
+    )
 
 
 configure_file (
